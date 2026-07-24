@@ -311,11 +311,19 @@
 
       <div id="emptyState" class="empty-state">
         <div class="seal-ghost">no<br>score<br>yet</div>
-        <p>Fill in the profile on the left — attachments and summary are optional but sharpen the read — then generate a score.</p>
+        <p>Fill in the profile on the left — attachments and summary are optional but sharpen the read — then generate your assessment.</p>
       </div>
 
+      <div class="ai-loading" id="aiLoading" style="display:none;">
+        <div class="spinner"></div>
+        <span id="aiLoadingText">Reading profile and attachments…</span>
+      </div>
+
+      <div class="ai-error" id="aiError"></div>
+      <button class="calc-btn ghost" id="aiBtn" style="display:none;">Retry assessment</button>
+
       <div id="results" style="display:none;">
-        <div class="seal-wrap">
+        <div class="ai-top">
           <div class="seal">
             <svg width="150" height="150" viewBox="0 0 150 150">
               <circle cx="75" cy="75" r="66" fill="none" stroke="var(--line)" stroke-width="10"/>
@@ -324,89 +332,45 @@
             </svg>
             <div class="seal-num">
               <div class="n" id="sealNum">0</div>
-              <div class="lbl">Composite / 100</div>
+              <div class="lbl">Score / 100</div>
             </div>
           </div>
-          <div class="tier-tag" id="tierTag">—</div>
+          <div>
+            <div class="tier-tag" id="tierTag" style="margin-top:0;">—</div>
+          </div>
         </div>
 
-        <div class="segment-box">
-          <div class="seg-label">Nearest historical segment</div>
-          <div class="seg-name" id="segName">—</div>
-          <div class="seg-detail" id="segDetail">—</div>
+        <div class="cohort-line" id="cohortLine"></div>
+
+        <div class="roles-wrap">
+          <div class="sec-label">Realistic post-MBA roles for this profile</div>
+          <div id="roles"></div>
         </div>
 
-        <div class="dims" id="dims"></div>
+        <div class="sg-grid">
+          <div class="sg-col strength">
+            <div class="sec-label">Strengths</div>
+            <ul id="strengths"></ul>
+          </div>
+          <div class="sg-col gap">
+            <div class="sec-label">Gaps to address</div>
+            <ul id="gaps"></ul>
+          </div>
+        </div>
 
-        <div class="narrative" id="narrativeBox"></div>
+        <div class="ai-report-text" id="reportText"></div>
 
         <details class="method" id="methodBlock">
-          <summary>Scoring methodology — how this number was built</summary>
+          <summary>Scoring methodology — how this was built</summary>
           <div class="method-body" id="methodBody"></div>
         </details>
-
-        <!-- AI ASSESSMENT -->
-        <div class="ai-block">
-          <div class="ai-head">
-            <h3>Full AI Assessment</h3>
-            <span class="ai-badge">Claude</span>
-          </div>
-          <div class="ai-sub">Generated automatically using your profile, summary, and any attached PDF/TXT files — score, likely cohort outcomes, and post-MBA role fit.</div>
-
-          <div class="ai-loading" id="aiLoading">
-            <div class="spinner"></div>
-            <span id="aiLoadingText">Reading profile and attachments…</span>
-          </div>
-
-          <div class="ai-error" id="aiError"></div>
-          <button class="calc-btn ghost" id="aiBtn" style="display:none;">Retry AI assessment</button>
-
-          <div class="ai-report" id="aiReport">
-            <div class="ai-top">
-              <div class="seal small">
-                <svg width="104" height="104" viewBox="0 0 104 104">
-                  <circle cx="52" cy="52" r="45" fill="none" stroke="var(--line)" stroke-width="8"/>
-                  <circle id="aiSealArc" cx="52" cy="52" r="45" fill="none" stroke="var(--forest)" stroke-width="8"
-                    stroke-linecap="round" stroke-dasharray="282.7" stroke-dashoffset="282.7"/>
-                </svg>
-                <div class="seal-num">
-                  <div class="n" id="aiSealNum">0</div>
-                  <div class="lbl">AI score</div>
-                </div>
-              </div>
-              <div>
-                <div class="tier-tag" id="aiTierTag" style="margin-top:0;">—</div>
-              </div>
-            </div>
-
-            <div class="cohort-line" id="aiCohortLine"></div>
-
-            <div class="roles-wrap">
-              <div class="sec-label">Realistic post-MBA roles for this profile</div>
-              <div id="aiRoles"></div>
-            </div>
-
-            <div class="sg-grid">
-              <div class="sg-col strength">
-                <div class="sec-label">Strengths</div>
-                <ul id="aiStrengths"></ul>
-              </div>
-              <div class="sg-col gap">
-                <div class="sec-label">Gaps to address</div>
-                <ul id="aiGaps"></ul>
-              </div>
-            </div>
-
-            <div class="ai-report-text" id="aiReportText"></div>
-          </div>
-        </div>
       </div>
     </div>
 
   </div>
 
   <div class="disclaimer">
-    <b>How to read this:</b> the instant score compares your inputs to simulated historical admit profiles and cohort-preference tables for illustration only. The AI assessment is generated live by Claude via a secure backend — your API key is never exposed to the browser. It reads PDF and TXT files directly, but not DOC/DOCX in this prototype. Neither score is predictive or a guarantee of admission; both are directional inputs meant to sit alongside a consultant's own review, not replace it. A production version would calibrate everything against Acceptance Consulting's actual client outcome data.
+    <b>How to read this:</b> this score and report are generated by Claude via a secure backend — your API key is never exposed to the browser — using a weighted per-school methodology (visible under "Scoring methodology" below the report) plus a direct read of your summary and any attached PDF/TXT files. It is not predictive or a guarantee of admission; it's a directional input meant to sit alongside a consultant's own review, not replace it. A production version would calibrate the underlying weights and segments against Acceptance Consulting's actual client outcome data.
   </div>
 
 </div>
@@ -565,6 +529,8 @@ function gatherProfile(){
 // =====================================================================
 // INSTANT RULE-BASED SCORE
 // =====================================================================
+let localContext = null; // computed silently on each run, fed to the AI prompt as context
+
 document.getElementById("calcBtn").addEventListener("click",()=>{
   const p = gatherProfile();
   const school = SCHOOLS[p.schoolKey];
@@ -603,53 +569,15 @@ document.getElementById("calcBtn").addEventListener("click",()=>{
     if(dist < bestDist){ bestDist=dist; best=seg; }
   });
 
-  document.getElementById("emptyState").style.display="none";
-  document.getElementById("results").style.display="block";
-  document.getElementById("resultTag").textContent = school.name;
-
-  document.getElementById("sealNum").textContent = composite;
-  const circumference = 2*Math.PI*66;
-  const offset = circumference - (composite/100)*circumference;
-  document.getElementById("sealArc").setAttribute("stroke-dasharray", circumference.toFixed(1));
-  document.getElementById("sealArc").style.strokeDashoffset = offset.toFixed(1);
-  document.getElementById("sealArc").setAttribute("stroke", composite>=70? "var(--forest)" : composite>=45? "var(--brass)" : "var(--rust)");
-
-  const tierTag = document.getElementById("tierTag");
-  let tierLabel;
-  if(composite>=75){ tierLabel="Strong match"; tierTag.style.color="var(--forest)"; }
-  else if(composite>=58){ tierLabel="Competitive"; tierTag.style.color="var(--brass)"; }
-  else if(composite>=40){ tierLabel="Developing"; tierTag.style.color="var(--rust)"; }
-  else { tierLabel="Early stage"; tierTag.style.color="var(--rust)"; }
-  tierTag.textContent = tierLabel;
-
-  document.getElementById("segName").textContent = best.name;
-  document.getElementById("segDetail").textContent = best.detail;
-
   const dimLabels = { test:"Test score", work:"Work experience", leadership:"Leadership scope", academics:"Academic pedigree", narrative:"Narrative strength", gap:"Career continuity", cohort:"Cohort fit" };
-  const dimsEl = document.getElementById("dims");
-  dimsEl.innerHTML="";
-  Object.keys(school.weights).forEach(k=>{
-    const v = Math.round(dims[k]);
-    const cls = tierColor(v);
-    const hasSignal = (k==="leadership" && leadershipAdj>0) || (k==="narrative" && narrativeAdj>0);
-    const row = document.createElement("div");
-    row.className="dim-row";
-    row.innerHTML = `
-      <div class="dim-head">
-        <span class="dname">${dimLabels[k]} <span style="color:var(--slate);font-weight:400;">(weight ${Math.round(school.weights[k]*100)}%)</span>${hasSignal?'<span class="signal-note">text signal detected</span>':''}</span>
-        <span class="dscore">${v}/100</span>
-      </div>
-      <div class="bar-track"><div class="bar-fill ${cls}" style="width:${v}%;"></div></div>
-    `;
-    dimsEl.appendChild(row);
-  });
 
-  const sortedDims = Object.keys(dims).sort((a,b)=>dims[b]-dims[a]);
-  document.getElementById("narrativeBox").innerHTML = `
-    <b>Read:</b> against <b>${school.name}</b>'s weighting, this profile lands in the <b>${tierLabel.toLowerCase()}</b> band,
-    closest to the <b>"${best.name}"</b> segment. Strongest dimension is <b>${dimLabels[sortedDims[0]].toLowerCase()}</b>;
-    the dimension needing the most work before applying is <b>${dimLabels[sortedDims[sortedDims.length-1]].toLowerCase()}</b>. ${school.note}
-  `;
+  // this local weighted estimate is NOT shown on its own — it's passed as
+  // context into the AI prompt, and only its methodology is exposed (below,
+  // collapsed) for transparency. The visible score/report is the AI's.
+  localContext = { p, school, dims, composite, best, signal, combinedText, dimLabels };
+
+  document.getElementById("emptyState").style.display="none";
+  document.getElementById("resultTag").textContent = school.name;
 
   const weightRows = Object.keys(school.weights).map(k=>
     `<tr><td>${dimLabels[k]}</td><td>${Math.round(school.weights[k]*100)}%</td><td>${Math.round(dims[k])}/100</td></tr>`
@@ -658,23 +586,24 @@ document.getElementById("calcBtn").addEventListener("click",()=>{
     `<tr><td>${INDUSTRY_LABELS[k]}</td><td>${school.cohort[k].toFixed(2)}×${k===p.industry?' <b>(selected)</b>':''}</td></tr>`
   ).join("");
   document.getElementById("methodBody").innerHTML = `
-    <p><b>1. Weighted dimension model.</b> Each school weights the same seven dimensions differently:</p>
-    <table><tr><th>Dimension</th><th>Weight at ${school.name}</th><th>This profile</th></tr>${weightRows}</table>
+    <p><b>1. Weighted dimension model.</b> Each school weights the same seven dimensions differently — this internal estimate is passed to Claude as context, not shown as its own score:</p>
+    <table><tr><th>Dimension</th><th>Weight at ${school.name}</th><th>Internal estimate</th></tr>${weightRows}</table>
     <p><b>2. Cohort preference multiplier.</b> Some functional cohorts are oversaturated (lower multiplier) and some are comparatively sought-after (higher multiplier) at each school:</p>
     <table><tr><th>Cohort</th><th>Multiplier at ${school.name}</th></tr>${cohortRows}</table>
-    <p><b>3. Nearest-segment matching.</b> Compared via weighted Euclidean distance against ${SEGMENTS.length} illustrative historical admit segments, with a soft penalty for cohort/work-ex mismatch.</p>
+    <p><b>3. Nearest-segment matching.</b> Internally compared via weighted Euclidean distance against ${SEGMENTS.length} illustrative historical admit segments — closest match: <b>${best.name}</b>.</p>
     <p><b>4. Text signal.</b> ${combinedText.trim().length>0
-      ? `Detected ${signal.leadershipHits} leadership-pattern keyword${signal.leadershipHits===1?'':'s'} and ${signal.narrativeHits} narrative-pattern keyword${signal.narrativeHits===1?'':'s'}. Nudges leadership/narrative by up to 15 points, blended 75% manual / 25% text-derived.`
-      : `No summary or plain-text attachment provided — this run used manual sliders only.`}</p>
+      ? `Detected ${signal.leadershipHits} leadership-pattern keyword${signal.leadershipHits===1?'':'s'} and ${signal.narrativeHits} narrative-pattern keyword${signal.narrativeHits===1?'':'s'} in your summary/attachments — passed to Claude along with the raw text.`
+      : `No summary or plain-text attachment provided.`}</p>
+    <p><b>5. Final score and report.</b> Claude receives all of the above as context plus your attached PDF/essay/CV directly, and produces the single score and report shown above — it may agree with, adjust, or override the internal estimate based on what it actually reads.</p>
   `;
 
-  // one click produces the instant score above AND the full AI report below,
-  // automatically incorporating whatever summary/attachments were provided.
+  // one click computes local context silently and produces exactly one
+  // AI-generated score + report, informed by that context.
   runAIAssessment();
 });
 
 // =====================================================================
-// FULL AI ASSESSMENT — calls the Anthropic API directly
+// FULL AI ASSESSMENT — calls our secure backend, which calls Claude
 // =====================================================================
 document.getElementById("aiBtn").addEventListener("click", runAIAssessment);
 
@@ -682,7 +611,9 @@ async function runAIAssessment(){
   const btn = document.getElementById("aiBtn");
   const loading = document.getElementById("aiLoading");
   const errorBox = document.getElementById("aiError");
-  const reportBox = document.getElementById("aiReport");
+  const reportBox = document.getElementById("results");
+
+  if(!localContext){ return; } // safety: shouldn't be callable before calcBtn has run once
 
   btn.disabled = true;
   btn.style.display = "none";
@@ -692,8 +623,7 @@ async function runAIAssessment(){
   document.getElementById("aiLoadingText").textContent = "Reading profile and attachments…";
 
   try{
-    const p = gatherProfile();
-    const school = SCHOOLS[p.schoolKey];
+    const { p, school, dims, composite, best, signal, combinedText, dimLabels } = localContext;
     const gapLabel = p.gapVal==="no" ? "No career gap" : p.gapVal==="short" ? "Short gap (under 1 year)" : "Extended gap or career pivot";
 
     const contentBlocks = [];
@@ -712,7 +642,10 @@ async function runAIAssessment(){
 
     document.getElementById("aiLoadingText").textContent = "Scoring against " + school.name + "…";
 
-    const promptText = `You are an experienced MBA admissions evaluator for ${school.name}. Assess this candidate using the profile fields below, the candidate's own summary, and any attached CV/essay PDF documents.
+    // internal heuristic estimate, passed as context only — never shown as its own score
+    const internalSummary = Object.keys(dims).map(k=>`${dimLabels[k]}: ${Math.round(dims[k])}/100 (weight ${Math.round(school.weights[k]*100)}%)`).join("; ");
+
+    const promptText = `You are an experienced MBA admissions evaluator for ${school.name}. Produce ONE final score and ONE final report for this candidate — this is the only assessment they will see, so make it complete and decisive. Use the profile fields, the candidate's own summary, any attached CV/essay PDF documents, and the internal heuristic estimate below as reference points, but form your own independent judgment — adjust or override the heuristic if what you read in the attachments warrants it.
 
 CANDIDATE PROFILE
 - Target school: ${school.name}
@@ -728,15 +661,21 @@ ${attachedText.cv ? `- CV text (plain text attachment): "${attachedText.cv.slice
 ${attachedText.essay ? `- Essay text (plain text attachment): "${attachedText.essay.slice(0,1500)}"` : ""}
 ${contentBlocks.length>0 ? "- One or more PDF documents (CV and/or essay) are attached above as native documents — read them directly." : ""}
 
+INTERNAL HEURISTIC ESTIMATE (reference only, not authoritative)
+- Weighted composite: ${composite}/100
+- Dimension breakdown: ${internalSummary}
+- Nearest historical segment: "${best.name}" — ${best.detail}
+- Text-signal keywords detected: ${signal.leadershipHits} leadership-pattern, ${signal.narrativeHits} narrative-pattern
+
 Return ONLY valid JSON, no markdown fences, no preamble, matching exactly this shape:
 {
-  "score": <integer 0-100>,
+  "score": <integer 0-100 — your own final judgment, may differ from the internal heuristic above>,
   "tier": "<Strong match|Competitive|Developing|Early stage>",
   "cohort_estimate": "<one short sentence estimating what proportion of similarly profiled applicants have historically been admitted to ${school.name}, phrased as a reasoned estimate, not a guarantee>",
   "post_mba_roles": ["<realistic role 1>", "<realistic role 2>", "<realistic role 3>"],
   "strengths": ["<short phrase>", "<short phrase>", "<short phrase>"],
   "gaps": ["<short phrase>", "<short phrase>"],
-  "report": "<a 120-180 word narrative assessment written directly to the candidate in second person, honest, specific, referencing the attached material if present>"
+  "report": "<a 150-220 word narrative assessment written directly to the candidate in second person, honest, specific, referencing the attached material if present and weaving in the strongest/weakest dimensions naturally rather than listing them>"
 }
 Keep the JSON compact and self-contained.`;
 
@@ -754,29 +693,29 @@ Keep the JSON compact and self-contained.`;
     try{
       data = await response.json();
     } catch(parseErr){
-      throw new Error("No valid response from /api/assess (status " + response.status + "). This usually means the backend isn't deployed yet — the AI assessment only works once this project is deployed on Vercel (or run locally with 'vercel dev'), since that's what turns api/assess.js into a live endpoint.");
+      throw new Error("No valid response from /api/assess (status " + response.status + "). This usually means the backend isn't deployed yet — the assessment only works once this project is deployed on Vercel (or run locally with 'vercel dev'), since that's what turns api/assess.js into a live endpoint.");
     }
     if(!response.ok){
       throw new Error(data.error || ("Assessment service returned an error (" + response.status + ")"));
     }
     const parsed = data.result;
 
-    // render
+    // render — one seal, one tier, one report
     const score = Math.max(0, Math.min(100, Math.round(parsed.score)));
-    document.getElementById("aiSealNum").textContent = score;
-    const circ = 2*Math.PI*45;
+    document.getElementById("sealNum").textContent = score;
+    const circ = 2*Math.PI*66;
     const off = circ - (score/100)*circ;
-    document.getElementById("aiSealArc").setAttribute("stroke-dasharray", circ.toFixed(1));
-    document.getElementById("aiSealArc").style.strokeDashoffset = off.toFixed(1);
-    document.getElementById("aiSealArc").setAttribute("stroke", score>=70? "var(--forest)" : score>=45? "var(--brass)" : "var(--rust)");
+    document.getElementById("sealArc").setAttribute("stroke-dasharray", circ.toFixed(1));
+    document.getElementById("sealArc").style.strokeDashoffset = off.toFixed(1);
+    document.getElementById("sealArc").setAttribute("stroke", score>=70? "var(--forest)" : score>=45? "var(--brass)" : "var(--rust)");
 
-    const aiTier = document.getElementById("aiTierTag");
-    aiTier.textContent = parsed.tier || "—";
-    aiTier.style.color = score>=70? "var(--forest)" : score>=45? "var(--brass)" : "var(--rust)";
+    const tier = document.getElementById("tierTag");
+    tier.textContent = parsed.tier || "—";
+    tier.style.color = score>=70? "var(--forest)" : score>=45? "var(--brass)" : "var(--rust)";
 
-    document.getElementById("aiCohortLine").innerHTML = `<b>Cohort estimate —</b> ${parsed.cohort_estimate || "Not available."}`;
+    document.getElementById("cohortLine").innerHTML = `<b>Cohort estimate —</b> ${parsed.cohort_estimate || "Not available."}`;
 
-    const rolesEl = document.getElementById("aiRoles");
+    const rolesEl = document.getElementById("roles");
     rolesEl.innerHTML = "";
     (parsed.post_mba_roles || []).forEach(r=>{
       const s = document.createElement("span");
@@ -785,16 +724,13 @@ Keep the JSON compact and self-contained.`;
       rolesEl.appendChild(s);
     });
 
-    const strEl = document.getElementById("aiStrengths");
-    strEl.innerHTML = (parsed.strengths || []).map(s=>`<li>${s}</li>`).join("");
-    const gapEl = document.getElementById("aiGaps");
-    gapEl.innerHTML = (parsed.gaps || []).map(g=>`<li>${g}</li>`).join("");
-
-    document.getElementById("aiReportText").textContent = parsed.report || "";
+    document.getElementById("strengths").innerHTML = (parsed.strengths || []).map(s=>`<li>${s}</li>`).join("");
+    document.getElementById("gaps").innerHTML = (parsed.gaps || []).map(g=>`<li>${g}</li>`).join("");
+    document.getElementById("reportText").textContent = parsed.report || "";
 
     reportBox.style.display = "block";
   } catch(err){
-    errorBox.textContent = "Couldn't generate the AI assessment — " + err.message + ". Please try again.";
+    errorBox.textContent = "Couldn't generate the assessment — " + err.message + ". Please try again.";
     errorBox.style.display = "block";
     btn.style.display = "block";
   } finally{
