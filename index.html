@@ -299,7 +299,7 @@
         <textarea id="summaryText" placeholder="e.g. I've spent 5 years leading a product team at a fintech startup, scaled our platform from 10k to 500k users, and I want an MBA to move into strategy consulting..."></textarea>
       </div>
 
-      <button class="calc-btn" id="calcBtn">Generate pre-screen score →</button>
+      <button class="calc-btn" id="calcBtn">Generate full assessment →</button>
     </div>
 
     <!-- RESULTS PANEL -->
@@ -351,9 +351,7 @@
             <h3>Full AI Assessment</h3>
             <span class="ai-badge">Claude</span>
           </div>
-          <div class="ai-sub">Sends your profile, summary, and attached PDF/TXT files to Claude for a full narrative read — score, likely cohort outcomes, and post-MBA role fit.</div>
-
-          <button class="calc-btn ghost" id="aiBtn">Generate AI assessment</button>
+          <div class="ai-sub">Generated automatically using your profile, summary, and any attached PDF/TXT files — score, likely cohort outcomes, and post-MBA role fit.</div>
 
           <div class="ai-loading" id="aiLoading">
             <div class="spinner"></div>
@@ -361,6 +359,7 @@
           </div>
 
           <div class="ai-error" id="aiError"></div>
+          <button class="calc-btn ghost" id="aiBtn" style="display:none;">Retry AI assessment</button>
 
           <div class="ai-report" id="aiReport">
             <div class="ai-top">
@@ -668,18 +667,25 @@ document.getElementById("calcBtn").addEventListener("click",()=>{
       ? `Detected ${signal.leadershipHits} leadership-pattern keyword${signal.leadershipHits===1?'':'s'} and ${signal.narrativeHits} narrative-pattern keyword${signal.narrativeHits===1?'':'s'}. Nudges leadership/narrative by up to 15 points, blended 75% manual / 25% text-derived.`
       : `No summary or plain-text attachment provided — this run used manual sliders only.`}</p>
   `;
+
+  // one click produces the instant score above AND the full AI report below,
+  // automatically incorporating whatever summary/attachments were provided.
+  runAIAssessment();
 });
 
 // =====================================================================
 // FULL AI ASSESSMENT — calls the Anthropic API directly
 // =====================================================================
-document.getElementById("aiBtn").addEventListener("click", async ()=>{
+document.getElementById("aiBtn").addEventListener("click", runAIAssessment);
+
+async function runAIAssessment(){
   const btn = document.getElementById("aiBtn");
   const loading = document.getElementById("aiLoading");
   const errorBox = document.getElementById("aiError");
   const reportBox = document.getElementById("aiReport");
 
   btn.disabled = true;
+  btn.style.display = "none";
   errorBox.style.display = "none";
   reportBox.style.display = "none";
   loading.style.display = "flex";
@@ -790,11 +796,12 @@ Keep the JSON compact and self-contained.`;
   } catch(err){
     errorBox.textContent = "Couldn't generate the AI assessment — " + err.message + ". Please try again.";
     errorBox.style.display = "block";
+    btn.style.display = "block";
   } finally{
     loading.style.display = "none";
     btn.disabled = false;
   }
-});
+}
 </script>
 </body>
 </html>
