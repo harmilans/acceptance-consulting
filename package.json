@@ -1,0 +1,9 @@
+{
+  "name": "acceptance-consulting-prescreen",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pre-screen scoring tool with Claude-powered assessment for MBA admissions candidates.",
+  "engines": {
+    "node": ">=18"
+  }
+}
