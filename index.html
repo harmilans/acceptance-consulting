@@ -744,7 +744,12 @@ Keep the JSON compact and self-contained.`;
       body: JSON.stringify({ content: contentBlocks })
     });
 
-    const data = await response.json();
+    let data;
+    try{
+      data = await response.json();
+    } catch(parseErr){
+      throw new Error("No valid response from /api/assess (status " + response.status + "). This usually means the backend isn't deployed yet — the AI assessment only works once this project is deployed on Vercel (or run locally with 'vercel dev'), since that's what turns api/assess.js into a live endpoint.");
+    }
     if(!response.ok){
       throw new Error(data.error || ("Assessment service returned an error (" + response.status + ")"));
     }
