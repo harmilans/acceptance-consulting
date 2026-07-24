@@ -132,9 +132,12 @@
   .ai-badge{ font-family:var(--mono); font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--forest); border:1px solid var(--forest); padding:3px 9px; border-radius:12px; }
   .ai-sub{ font-size:12.5px; color:var(--slate); margin-bottom:16px; line-height:1.5; }
 
-  .ai-loading{ display:none; align-items:center; gap:10px; font-size:13px; color:var(--slate); padding:16px 0; }
-  .spinner{ width:16px;height:16px; border:2px solid var(--line); border-top-color:var(--brass); border-radius:50%; animation:spin 0.8s linear infinite; }
+  .ai-loading{ display:none; align-items:center; gap:14px; font-size:14.5px; color:var(--ink-2); padding:26px 4px; font-weight:600; }
+  .spinner{ width:22px;height:22px; border:3px solid var(--line); border-top-color:var(--brass); border-radius:50%; animation:spin 0.7s linear infinite; flex-shrink:0; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  @keyframes fadeInUp{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
+  .result-reveal{ animation: fadeInUp 0.5s ease; }
 
   .ai-error{ display:none; background:#F7EAE7; border:1px solid #E0BDB4; color:var(--rust); font-size:13px; padding:12px 14px; border-radius:2px; margin-top:10px; line-height:1.5; }
 
@@ -303,7 +306,7 @@
     </div>
 
     <!-- RESULTS PANEL -->
-    <div class="panel">
+    <div class="panel" id="evalPanel">
       <div class="panel-head">
         <h2>Evaluation</h2>
         <span id="resultTag">Awaiting input</span>
@@ -532,6 +535,14 @@ function gatherProfile(){
 let localContext = null; // computed silently on each run, fed to the AI prompt as context
 
 document.getElementById("calcBtn").addEventListener("click",()=>{
+  // immediate feedback the instant the click happens — before any computation —
+  // so it's obvious something started, even before the report is ready
+  const mainBtn = document.getElementById("calcBtn");
+  mainBtn.disabled = true;
+  mainBtn.textContent = "Generating…";
+  document.getElementById("emptyState").style.display = "none";
+  document.getElementById("evalPanel").scrollIntoView({ behavior:"smooth", block:"start" });
+
   const p = gatherProfile();
   const school = SCHOOLS[p.schoolKey];
   const testNorm = normalizeTest(p.testScoreRaw, p.testType);
@@ -576,7 +587,6 @@ document.getElementById("calcBtn").addEventListener("click",()=>{
   // collapsed) for transparency. The visible score/report is the AI's.
   localContext = { p, school, dims, composite, best, signal, combinedText, dimLabels };
 
-  document.getElementById("emptyState").style.display="none";
   document.getElementById("resultTag").textContent = school.name;
 
   const weightRows = Object.keys(school.weights).map(k=>
@@ -608,6 +618,7 @@ document.getElementById("calcBtn").addEventListener("click",()=>{
 document.getElementById("aiBtn").addEventListener("click", runAIAssessment);
 
 async function runAIAssessment(){
+  const mainBtn = document.getElementById("calcBtn");
   const btn = document.getElementById("aiBtn");
   const loading = document.getElementById("aiLoading");
   const errorBox = document.getElementById("aiError");
@@ -615,10 +626,13 @@ async function runAIAssessment(){
 
   if(!localContext){ return; } // safety: shouldn't be callable before calcBtn has run once
 
+  document.getElementById("evalPanel").scrollIntoView({ behavior:"smooth", block:"start" });
+
   btn.disabled = true;
   btn.style.display = "none";
   errorBox.style.display = "none";
   reportBox.style.display = "none";
+  reportBox.classList.remove("result-reveal");
   loading.style.display = "flex";
   document.getElementById("aiLoadingText").textContent = "Reading profile and attachments…";
 
@@ -729,6 +743,7 @@ Keep the JSON compact and self-contained.`;
     document.getElementById("reportText").textContent = parsed.report || "";
 
     reportBox.style.display = "block";
+    reportBox.classList.add("result-reveal");
   } catch(err){
     errorBox.textContent = "Couldn't generate the assessment — " + err.message + ". Please try again.";
     errorBox.style.display = "block";
@@ -736,6 +751,8 @@ Keep the JSON compact and self-contained.`;
   } finally{
     loading.style.display = "none";
     btn.disabled = false;
+    mainBtn.disabled = false;
+    mainBtn.textContent = "Generate full assessment →";
   }
 }
 </script>
